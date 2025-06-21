@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="favicon.png" type="image/png">
+    <title>Login - Sistema de Outdoors</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        body {
+            background: #f5f6fa;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            color: #7f8c8d;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #3498db;
+            border-bottom: 2px solid #3498db;
+            margin-bottom: -2px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #2f3640;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #dcdde1;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 10px;
+            top: 35px;
+            cursor: pointer;
+            color: #7f8c8d;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .submit-btn:hover {
+            background: #2980b9;
+        }
+
+        .forgot-password {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .forgot-password a {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .forgot-password a:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        .success-message {
+            color: #2ecc71;
+            margin-top: 10px;
+            text-align: center;
+            display: none;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                margin: 20px;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="text-align:center;margin-bottom:6px;">
+    <div style="font-size:2.1rem;font-weight:900;color:#20638C;letter-spacing:2px;text-shadow:0 2px 10px #20638C33,0 1px 0 #fff;">OsmarAds</div>
+    <div style="font-size:1.02rem;color:#7f8c8d;margin-bottom:8px;letter-spacing:1px;">sistema de anúncio em telas públicas</div>
+</div>
+<div class="logo-container" style="text-align:center;margin-bottom:18px;">
+    <img src="favicon.png" alt="Logo do Sistema de Outdoors" class="logo-img" style="width:80px;height:80px;object-fit:contain;filter: drop-shadow(0 0 12px #20638C77);">
+</div>
+<div class="tabs">
+            <div class="tab active" onclick="showTab('login')">Login</div>
+            <div class="tab" onclick="showTab('register')">Registro</div>
+        </div>
+
+        <div id="login-form">
+            <div class="form-group">
+                <label for="login-email">Email</label>
+                <input type="email" id="login-email" required>
+            </div>
+            <div class="form-group">
+                <label for="login-password">Senha</label>
+                <input type="password" id="login-password" required>
+                <span class="password-toggle" onclick="togglePassword('login-password')">👁️</span>
+            </div>
+            <button class="submit-btn" onclick="login()">Entrar</button>
+            <div class="forgot-password">
+                <a href="#" onclick="showTab('recover')">Esqueceu sua senha?</a>
+            </div>
+            <div id="login-error" class="error-message"></div>
+            <div id="login-success" class="success-message"></div>
+        </div>
+
+        <form id="register-form" style="display: none;" onsubmit="event.preventDefault(); register();">
+            <div class="form-group">
+                <label for="register-name">Nome</label>
+                <input type="text" id="register-name" required>
+            </div>
+            <div class="form-group">
+                <label for="register-email">Email</label>
+                <input type="email" id="register-email" required>
+            </div>
+            <div class="form-group">
+                <label for="register-password">Senha</label>
+                <input type="password" id="register-password" required>
+                <span class="password-toggle" onclick="togglePassword('register-password')">👁️</span>
+            </div>
+            <button class="submit-btn" type="submit">Registrar</button>
+            <div id="register-error" class="error-message"></div>
+            <div id="register-success" class="success-message"></div>
+        </form>
+
+        <div id="recover-form" style="display: none;">
+            <div class="form-group">
+                <label for="recover-email">Email</label>
+                <input type="email" id="recover-email" required>
+            </div>
+            <button class="submit-btn" onclick="recoverPassword()">Recuperar Senha</button>
+            <div class="forgot-password">
+                <a href="#" onclick="showTab('login')">Voltar para o login</a>
+            </div>
+            <div id="recover-error" class="error-message"></div>
+            <div id="recover-success" class="success-message"></div>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(tab => {
+                if (tab.textContent.toLowerCase().includes(tabName)) {
+                    tab.classList.add('active');
+                }
+            });
+
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('register-form').style.display = 'none';
+            document.getElementById('recover-form').style.display = 'none';
+
+            document.getElementById(`${tabName}-form`).style.display = 'block';
+        }
+
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        async function login() {
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errorElement = document.getElementById('login-error');
+            const successElement = document.getElementById('login-success');
+
+            if (!email || !password) {
+                errorElement.textContent = 'Por favor, preencha todos os campos';
+                errorElement.style.display = 'block';
+                successElement.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    successElement.textContent = 'Login realizado com sucesso!';
+                    successElement.style.display = 'block';
+                    errorElement.style.display = 'none';
+                    
+                    // Aguardar 1 segundo antes de redirecionar
+                    setTimeout(() => {
+                        window.location.href = '/dashboard.html';
+                    }, 1000);
+                } else {
+                    errorElement.textContent = data.error || 'Erro ao fazer login';
+                    errorElement.style.display = 'block';
+                    successElement.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                errorElement.textContent = 'Erro ao fazer login. Por favor, tente novamente.';
+                errorElement.style.display = 'block';
+                successElement.style.display = 'none';
+            }
+        }
+
+        async function register() {
+            const name = document.getElementById('register-name').value.trim();
+            const email = document.getElementById('register-email').value.trim();
+            const password = document.getElementById('register-password').value;
+            const errorElement = document.getElementById('register-error');
+            const successElement = document.getElementById('register-success');
+
+            if (!name || !email || !password) {
+                errorElement.textContent = 'Por favor, preencha todos os campos';
+                errorElement.style.display = 'block';
+                successElement.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ nome: name, email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    successElement.textContent = 'Conta criada, anote seu gmail e senha.';
+                    successElement.style.display = 'block';
+                    errorElement.style.display = 'none';
+                    document.getElementById('register-form').reset();
+                    setTimeout(() => showTab('login'), 2000);
+                } else {
+                    errorElement.textContent = data.error || 'Erro ao registrar';
+                    errorElement.style.display = 'block';
+                    successElement.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                errorElement.textContent = 'Conta criada, anote seu gmail e senha.'
+                errorElement.style.display = 'block';
+                successElement.style.display = 'none';
+            }
+        }
+
+        async function recoverPassword() {
+            const email = document.getElementById('recover-email').value.trim();
+            const errorElement = document.getElementById('recover-error');
+            const successElement = document.getElementById('recover-success');
+
+            if (!email) {
+                errorElement.textContent = 'Por favor, insira seu email';
+                errorElement.style.display = 'block';
+                successElement.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/recover-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    successElement.textContent = 'Se o email existir, você receberá as instruções para recuperar sua senha.';
+                    successElement.style.display = 'block';
+                    errorElement.style.display = 'none';
+                    document.getElementById('recover-form').reset();
+                } else {
+                    errorElement.textContent = data.error || 'Erro ao processar a solicitação';
+                    errorElement.style.display = 'block';
+                    successElement.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                errorElement.textContent = 'Erro ao processar a solicitação. Por favor, tente novamente.';
+                errorElement.style.display = 'block';
+                successElement.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html> 

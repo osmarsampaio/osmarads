@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player de Vídeo Simplificado</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+        
+        #video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+        }
+        
+        #video-player {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        #debug {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 10px;
+            font-family: monospace;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <video id="video-player" controls muted autoplay playsinline></video>
+    </div>
+    
+    <div id="debug">Carregando...</div>
+    
+    <script>
+        // Elementos do DOM
+        const videoPlayer = document.getElementById('video-player');
+        const debugElement = document.getElementById('debug');
+        
+        // URL do vídeo de teste (substitua pela sua URL real)
+        const videoUrl = 'https://osmarads.onrender.com/uploads/680d1cdf-c2c8-4549-947e-3535a1d7f189_anuncio1.1.mp4';
+        
+        // Função para atualizar o debug
+        function updateDebug(message) {
+            debugElement.textContent = message;
+            console.log(message);
+        }
+        
+        // Configurar o player de vídeo
+        function setupVideoPlayer() {
+            updateDebug('Configurando player de vídeo...');
+            
+            // Configurar fonte do vídeo
+            const source = document.createElement('source');
+            source.src = videoUrl;
+            source.type = 'video/mp4';
+            
+            // Limpar fontes existentes
+            while (videoPlayer.firstChild) {
+                videoPlayer.removeChild(videoPlayer.firstChild);
+            }
+            
+            // Adicionar nova fonte
+            videoPlayer.appendChild(source);
+            
+            // Configurar eventos
+            videoPlayer.onloadedmetadata = function() {
+                updateDebug(`Vídeo carregado: ${videoPlayer.videoWidth}x${videoPlayer.videoHeight}`);
+                videoPlayer.play().catch(error => {
+                    updateDebug(`Erro ao reproduzir: ${error.message}`);
+                });
+            };
+            
+            videoPlayer.onplay = function() {
+                updateDebug('Vídeo em reprodução');
+            };
+            
+            videoPlayer.onerror = function() {
+                updateDebug('Erro ao carregar o vídeo');
+                console.error('Erro de mídia:', videoPlayer.error);
+            };
+        }
+        
+        // Inicializar quando o DOM estiver pronto
+        document.addEventListener('DOMContentLoaded', setupVideoPlayer);
+    </script>
+</body>
+</html>

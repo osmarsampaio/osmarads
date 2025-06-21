@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512px" height="512px" viewBox="0 0 512 512" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>Outdoor Player Icon</title>
+    <defs>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-1">
+            <stop stop-color="#4285F4" offset="0%"></stop>
+            <stop stop-color="#34A853" offset="100%"></stop>
+        </linearGradient>
+        <circle id="path-2" cx="256" cy="256" r="256"></circle>
+        <filter x="-4.2%" y="-4.2%" width="108.3%" height="108.3%" filterUnits="objectBoundingBox" id="filter-3">
+            <feOffset dx="0" dy="4" in="SourceAlpha" result="shadowOffsetOuter1"></feOffset>
+            <feGaussianBlur stdDeviation="8" in="shadowOffsetOuter1" result="shadowBlurOuter1"></feGaussianBlur>
+            <feColorMatrix values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 0.2 0" type="matrix" in="shadowBlurOuter1"></feColorMatrix>
+        </filter>
+    </defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="icon">
+            <g id="icon-bg">
+                <use fill="#000000" filter="url(#filter-3)" xlink:href="#path-2"></use>
+                <use fill="url(#linearGradient-1)" fill-rule="evenodd" xlink:href="#path-2"></use>
+            </g>
+            <path d="M256,128 C183.48,128 124,187.48 124,260 C124,332.52 183.48,392 256,392 C328.52,392 388,332.52 388,260 C388,187.48 328.52,128 256,128 Z M256,368 C201.04,368 156,322.96 156,268 C156,213.04 201.04,168 256,168 C310.96,168 356,213.04 356,268 C356,322.96 310.96,368 256,368 Z M256,200 C229.49,200 208,221.49 208,248 C208,274.51 229.49,296 256,296 C282.51,296 304,274.51 304,248 C304,221.49 282.51,200 256,200 Z" id="Shape" fill="#FFFFFF" fill-rule="nonzero"></path>
+            <circle id="Oval" fill="#FFFFFF" cx="256" cy="248" r="24"></circle>
+        </g>
+    </g>
+</svg>

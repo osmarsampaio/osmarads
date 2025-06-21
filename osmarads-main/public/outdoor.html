@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="favicon.png" type="image/png">
+    <title>Visualização de Outdoor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #player-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #anuncios-container {
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        #anuncios-container img,
+        #anuncios-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+        }
+
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            display: none;
+        }
+
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div style="text-align:center;margin-bottom:4px;">
+        <div style="font-size:2.1rem;font-weight:900;color:#20638C;letter-spacing:2px;text-shadow:0 2px 10px #20638C33,0 1px 0 #fff;">OsmarAds</div>
+        <div style="font-size:1.02rem;color:#7f8c8d;margin-bottom:8px;letter-spacing:1px;">sistema de anúncio em telas públicas</div>
+    </div>
+    <div class="logo-container" style="text-align:center;margin-bottom:14px;">
+        <img src="favicon.png" alt="Logo do Sistema de Outdoors" class="logo-img" style="width:80px;height:80px;object-fit:contain;">
+    </div>
+    <div id="player-container">
+        <div id="loading">Carregando...</div>
+        <div id="error"></div>
+        <div id="anuncios-container"></div>
+    </div>
+    <div class="debug-info" id="debugInfo"></div>
+
+    <script>
+        let currentIndex = 0;
+        let anuncios = [];
+        let isTransitioning = false;
+        let outdoorId = new URLSearchParams(window.location.search).get('id');
+        const debugInfo = document.getElementById('debugInfo');
+
+        // Função para mostrar erro
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').textContent = message;
+            document.getElementById('error').style.display = 'block';
+        }
+
+        // Função para carregar o outdoor
+        async function loadOutdoor() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const outdoorId = urlParams.get('id');
+                
+                if (!outdoorId) {
+                    throw new Error('ID do outdoor não fornecido');
+                }
+
+                console.log('Tentando carregar outdoor com código:', outdoorId);
+                
+                const response = await fetch(`/api/outdoors/publico/${outdoorId}`);
+                console.log('Status da resposta:', response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro ao carregar outdoor');
+                }
+
+                const outdoor = await response.json();
+                console.log('Outdoor carregado:', outdoor);
+
+                if (!outdoor) {
+                    throw new Error('Outdoor não encontrado');
+                }
+
+                await loadAnuncios(outdoorId);
+            } catch (error) {
+                console.error('Erro ao carregar outdoor:', error);
+                showError(error.message);
+            }
+        }
+
+        // Função para carregar os anúncios
+        async function loadAnuncios(outdoorId) {
+            try {
+                console.log('Carregando anúncios para o outdoor:', outdoorId);
+                const response = await fetch(`/api/outdoors/publico/${outdoorId}/anuncios`);
+                console.log('Status da resposta dos anúncios:', response.status);
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Erro ao carregar anúncios');
+                }
+
+                anuncios = await response.json();
+                console.log('Anúncios carregados:', anuncios);
+
+                if (anuncios.length === 0) {
+                    showError('Nenhum anúncio encontrado para este outdoor');
+                    return;
+                }
+
+                document.getElementById('loading').style.display = 'none';
+                currentIndex = 0;
+                playNext();
+            } catch (error) {
+                console.error('Erro ao carregar anúncios:', error);
+                showError(error.message || 'Erro ao carregar anúncios');
+            }
+        }
+
+        // Função para reproduzir o próximo anúncio
+        function playNext() {
+            if (isTransitioning) {
+                console.log('Transição em andamento, ignorando chamada');
+                return;
+            }
+
+            if (anuncios.length === 0) {
+                showError('Nenhum anúncio disponível');
+                return;
+            }
+
+            isTransitioning = true;
+            const currentAnuncio = anuncios[currentIndex];
+            console.log('Reproduzindo anúncio:', currentIndex + 1, 'de', anuncios.length);
+            console.log('Detalhes do anúncio:', {
+                tipo: currentAnuncio.tipo,
+                arquivo: currentAnuncio.arquivo,
+                duracao: currentAnuncio.duracao
+            });
+
+            const container = document.getElementById('anuncios-container');
+            container.innerHTML = '';
+            container.style.display = 'block';
+            console.log('Container de anúncios exibido');
+
+            if (currentAnuncio.tipo === 'imagem') {
+                console.log('Criando elemento de imagem');
+                const img = document.createElement('img');
+                img.src = `/uploads/${currentAnuncio.arquivo}`;
+                console.log('URL da imagem:', img.src);
+                img.onload = () => {
+                    console.log('Imagem carregada com sucesso');
+                    container.appendChild(img);
+                    setTimeout(() => {
+                        isTransitioning = false;
+                        currentIndex = (currentIndex + 1) % anuncios.length;
+                        playNext();
+                    }, currentAnuncio.duracao * 1000);
+                };
+                img.onerror = (error) => {
+                    console.error('Erro ao carregar imagem:', error);
+                    isTransitioning = false;
+                    currentIndex = (currentIndex + 1) % anuncios.length;
+                    setTimeout(playNext, 1000);
+                };
+            } else {
+                console.log('Criando elemento de vídeo');
+                const video = document.createElement('video');
+                video.src = `/uploads/${currentAnuncio.arquivo}`;
+                console.log('URL do vídeo:', video.src);
+                video.autoplay = true;
+                video.volume = 1.0;
+                video.onended = () => {
+                    console.log('Vídeo finalizado');
+                    isTransitioning = false;
+                    currentIndex = (currentIndex + 1) % anuncios.length;
+                    playNext();
+                };
+                video.onerror = (error) => {
+                    console.error('Erro ao carregar vídeo:', error);
+                    isTransitioning = false;
+                    currentIndex = (currentIndex + 1) % anuncios.length;
+                    setTimeout(playNext, 1000);
+                };
+                container.appendChild(video);
+            }
+
+            debugInfo.textContent = `Anúncio ${currentIndex + 1}/${anuncios.length} - ${currentAnuncio.tipo}`;
+            debugInfo.style.display = 'block';
+        }
+
+        // Carregar outdoor quando a página carregar
+        window.onload = loadOutdoor;
+    </script>
+</body>
+</html> 
