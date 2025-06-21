@@ -1,0 +1,16 @@
+[
+  {
+    "id": 2,
+    "nome": "tv",
+    "localizacao": "carnaubal",
+    "tipo": "LED",
+    "usuario": "osmaroliveira570@gmail.com",
+    "anuncios": [
+      "e9b552b9-ff5a-49be-b0e4-66bba6ed919c",
+      "7e539c1d-4011-48b8-b6a5-52e516f660ed",
+      "e403d069-774d-4f22-bbca-0a1abc7d114a",
+      "b1853774-fe24-4ea7-a1c4-7ac964d0d4b0",
+      "1bd57321-cca7-4000-bb27-98b83608e844"
+    ]
+  }
+]

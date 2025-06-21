@@ -1,0 +1,14 @@
+[
+  {
+    "nome": "osmar",
+    "email": "osmaroliveira570@gmail.com",
+    "senha": "@Osmar123",
+    "tipo": "cliente"
+  },
+  {
+    "nome": "admin",
+    "email": "admin@gmail.com",
+    "senha": "@Osmar123",
+    "tipo": "cliente"
+  }
+]

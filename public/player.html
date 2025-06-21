@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Outdoor</title>
+    <!-- Melhorias para Smart TVs -->
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        // Configurações para Smart TVs
+        const userAgent = navigator.userAgent.toLowerCase();
+        const IS_WEBOS = userAgent.includes('webos') || userAgent.includes('lg ');
+        const IS_TIZEN = userAgent.includes('samsung') || userAgent.includes('tizen');
+        const IS_ANDROID_TV = userAgent.includes('android') && (userAgent.includes('tv') || userAgent.includes('tcl'));
+        const IS_SMART_TV = IS_WEBOS || IS_TIZEN || IS_ANDROID_TV;
+        
+        // Configurações de URL e conexão otimizadas
+        const SERVER_URL = 'https://osmarads.onrender.com';
+        const CONFIG_SOCKET = {
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
+            autoConnect: true,
+            transports: ['websocket'],
+            upgrade: false,
+            forceNew: true,
+            withCredentials: true
+        };
+        
+        // Configurações específicas por plataforma
+        const TV_CONFIG = {
+            isWebOS: IS_WEBOS,
+            isTizen: IS_TIZEN,
+            isAndroidTV: IS_ANDROID_TV,
+            platform: IS_WEBOS ? 'webos' : IS_TIZEN ? 'tizen' : IS_ANDROID_TV ? 'androidtv' : 'web'
+        };
+        
+        console.log('Detectado dispositivo:', TV_CONFIG.platform);
+        
+        // Configuração otimizada do Socket.IO
+        let socket;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        
+        function initSocket() {
+            if (socket?.connected) return socket;
+            
+            console.log('Iniciando conexão Socket.IO...');
+            
+            // Fecha conexão existente se houver
+            if (socket) {
+                socket.close();
+                socket.removeAllListeners();
+            }
+            
+            // Cria nova instância do socket
+            socket = io(SERVER_URL, CONFIG_SOCKET);
+            
+            // Configura eventos
+            socket.on('connect', () => {
+                console.log('Conectado ao servidor');
+                reconnectAttempts = 0;
+                if (status) status.textContent = 'Conectado';
+                
+                // Reconecta ao outdoor atual se necessário
+                if (currentOutdoorId) {
+                    socket.emit('join_outdoor', { outdoor_id: currentOutdoorId });
+                }
+            });
+            
+            socket.on('disconnect', (reason) => {
+                console.log('Desconectado:', reason);
+                if (reason === 'io server disconnect' || reason === 'transport close') {
+                    // Reconecta automaticamente
+                    socket.connect();
+                }
+            });
+            
+            socket.on('connect_error', (error) => {
+                console.error('Erro de conexão:', error);
+                if (status) status.textContent = 'Erro de conexão, tentando reconectar...';
+                
+                // Tenta reconectar com backoff exponencial
+                reconnectAttempts++;
+                if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                    console.log(`Tentando reconectar em ${delay}ms (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+                    setTimeout(initSocket, delay);
+                }
+            });
+            
+            // Configura outros manipuladores de eventos
+            setupSocketHandlers(socket);
+            
+            return socket;
+        }
+    </script>
+    <style>
+        /* Reset CSS */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        /* Estilos base para o player */
+        html, body, #player {
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            background-color: #000 !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        #video-container {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background-color: #000 !important;
+            z-index: 1000 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+        
+        #main-video {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+            display: block !important;
+            visibility: visible !important;
+            position: relative !important;
+            margin: 0 auto !important;
+        }
+        
+        /* Estilos existentes */
+
+        body {
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .player-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #000;
+            position: relative;
+        }
+
+        .status {
+            color: #fff;
+            margin-bottom: 20px;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 100001;
+            font-family: monospace;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            position: relative;
+        }
+        
+        .video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 4px solid #00ff00; /* Verde para debug */
+        }
+
+        #player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0000ff; /* Azul para debug */
+            display: block;
+            visibility: visible;
+            z-index: 2;
+            overflow: hidden;
+            border: 2px solid yellow; /* Amarelo para debug */
+        }
+        
+        /* Container do vídeo */
+        .video-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #ff0000; /* Vermelho para debug */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 3;
+        }
+        
+        #player video {
+            position: relative;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            margin: 0;
+            padding: 0;
+            background-color: #00ff00; /* Verde para debug */
+            display: block;
+            visibility: visible;
+            z-index: 4;
+            border: 2px solid white; /* Branco para debug */
+        }
+
+        .fullscreen-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .fullscreen-btn:hover {
+            background-color: rgba(0, 0, 0, 0.95);
+            transform: scale(1.1);
+        }
+
+        .info-screen {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-90deg);
+            width: 100vh;
+            height: 300px;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .info-screen .date-time {
+            margin-bottom: 20px;
+        }
+
+        .info-screen .date {
+            font-size: 36px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .info-screen .time {
+            font-size: 64px;
+            font-weight: bold;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            background: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: #ccc;
+            transform: scale(1.1);
+        }
+
+        @media screen and (max-width: 1920px) {
+            .status {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
+            
+            .controls {
+                gap: 10px;
+                padding: 10px;
+            }
+            
+            .control-btn {
+                padding: 8px 16px;
+                font-size: 14px;
+            }
+            
+            .time {
+                font-size: 48px;
+            }
+            
+            .date {
+                font-size: 24px;
+            }
+        }
+
+        @media screen and (max-height: 1080px) {
+            .video-container {
+                height: calc(100vh - 40px);
+            }
+            
+            .time {
+                font-size: 48px;
+            }
+            
+            .date {
+                font-size: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="player">
+            <!-- O vídeo será inserido aqui via JavaScript -->
+        </div>
+        
+        <!-- Elemento para feedback de depuração -->
+        <div id="debug-info" style="position: fixed; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.7); padding: 10px; z-index: 10000; font-family: monospace;">
+            Carregando...
+        </div>
+
+        <script>
+            // Inicializar variáveis globais
+            let currentOutdoorId = null;
+            let currentAnuncio = 0;
+            let anuncios = [];
+            let infoTimeout = null;
+            let isShowingInfo = false;
+            let currentTimeout = null; // Timeout para retry de reprodução
+            const INFO_DURATION = 5000; // 5 segundos
+            let player = null;
+            let status = null;
+            let fullscreenBtn = null;
+            let infoScreen = null;
+            let currentDate = null;
+            let currentTime = null;
+
+            // Função para configurar os manipuladores de eventos do socket
+            function setupSocketHandlers(socket) {
+                if (!socket) return;
+                
+                // Evento para recarregar o player
+                socket.on('reloadPlayer', (data) => {
+                    if (data.outdoor_id === currentOutdoorId) {
+                        console.log('Recebido comando para recarregar player específico');
+                        window.location.reload();
+                    }
+                });
+
+                // Evento de erro de conexão
+                socket.on('connect_error', (error) => {
+                    console.error('Erro de conexão:', error);
+                    if (status) {
+                        status.textContent = 'Erro de conexão com o servidor';
+                    }
+                });
+
+                // Evento de reconexão
+                socket.on('reconnect', () => {
+                    console.log('Reconectado ao servidor');
+                    if (status) {
+                        status.textContent = 'Reconectado ao servidor';
+                    }
+                });
+                
+                // Evento de atualização de outdoor
+                socket.on('outdoor_updated', (data) => {
+                    console.log('Outdoor atualizado, recarregando anúncios...', data);
+                    if (data.outdoor_id == currentOutdoorId) {
+                        loadAnuncios();
+                    }
+                });
+
+                // Evento de atualização de anúncio
+                socket.on('anuncio_updated', (data) => {
+                    console.log('Anúncio atualizado, recarregando lista...', data);
+                    if (data.outdoor_id == currentOutdoorId) {
+                        loadAnuncios();
+                    }
+                });
+                
+                // Entrar na sala do outdoor atual
+                if (currentOutdoorId) {
+                    socket.emit('join_outdoor', { outdoor_id: currentOutdoorId });
+                }
+            }
+
+            // Função para configurar o socket
+            function setupSocket() {
+                try {
+                    if (!window.socketInstance || !window.socketInstance.connected) {
+                        console.log('Iniciando configuração do socket...');
+                        window.socketInstance = initSocket();
+                    }
+                    return window.socketInstance;
+                } catch (error) {
+                    console.error('Erro ao configurar o socket:', error);
+                    if (status) {
+                        status.textContent = 'Erro ao configurar a conexão';
+                    }
+                    return null;
+                }
+            }
+
+            // Função para inicializar elementos do DOM
+            function initElements() {
+                try {
+                    player = document.getElementById('player');
+                    status = document.querySelector('.status');
+                    infoScreen = document.querySelector('.info-screen');
+                    currentDate = document.getElementById('currentDate');
+                    currentTime = document.getElementById('currentTime');
+                    
+                    fullscreenBtn = document.querySelector('.fullscreen-btn');
+                    
+                    if (!player || !status || !infoScreen || !currentDate || !currentTime || !fullscreenBtn) {
+                        throw new Error('Alguns elementos do DOM não foram encontrados');
+                    }
+
+                    // Configurar eventos do player
+                    if (player) {
+                        player.addEventListener('canplay', handleCanPlay);
+                        player.addEventListener('error', handleError);
+                        player.addEventListener('ended', handleVideoEnded);
+                    }
+
+                    return true;
+                } catch (error) {
+                    console.error('Erro na inicialização:', error);
+                    return false;
+                }
+            }
+
+            // Configurar eventos de tela cheia
+            function setupFullscreenEvents() {
+                if (fullscreenBtn && player) {
+                    fullscreenBtn.addEventListener('click', toggleFullscreen);
+                }
+
+                // Atualizar ícone do botão quando entrar/sair do modo tela cheia
+                document.addEventListener('fullscreenchange', updateFullscreenButton);
+
+                // Adicionar suporte a teclas de controle remoto para Smart TVs
+                document.addEventListener('keydown', (e) => {
+                    // Teclas padrão
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Return') {
+                        toggleFullscreen();
+                    }
+                    
+                    // Teclas específicas do controle remoto LG WebOS
+                    const webOSKeys = {
+                        'KEY_RETURN': 'Enter',
+                        'KEY_ENTER': 'Enter',
+                        'KEY_SPACE': 'Space',
+                        'KEY_PLAY': 'Play',
+                        'KEY_PAUSE': 'Pause'
+                    };
+                    
+                    // Verificar se é uma tecla do WebOS
+                    if (e.detail && e.detail.keycode) {
+                        const webOSKey = webOSKeys[e.detail.keycode];
+                        if (webOSKey) {
+                            if (webOSKey === 'Enter' || webOSKey === 'Space') {
+                                toggleFullscreen();
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Função para atualizar a tela de informações
+            function updateInfoScreen() {
+                if (!currentDate || !currentTime) return;
+
+                // Atualizar data e hora
+                const now = new Date();
+                currentDate.textContent = now.toLocaleDateString('pt-BR', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                currentTime.textContent = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            }
+
+            // Função para alternar entre anúncio e tela de informações
+            function toggleContent() {
+                try {
+                    if (isShowingInfo) {
+                        // Se estiver mostrando informações, voltar para o anúncio
+                        infoScreen.style.display = 'none';
+                        if (player) {
+                            player.style.display = 'block';
+                            tryPlayVideo();
+                        }
+                        if (status) {
+                            status.textContent = 'Reproduzindo anúncio';
+                        }
+                    } else {
+                        // Se estiver mostrando vídeo, mostrar informações
+                        infoScreen.style.display = 'flex';
+                        if (player) {
+                            player.style.display = 'none';
+                        }
+                        if (status) {
+                            status.textContent = 'Exibindo informações';
+                        }
+                    }
+                    isShowingInfo = !isShowingInfo;
+                } catch (error) {
+                    console.error('Erro ao alternar conteúdo:', error);
+                }
+            }
+
+            // Função para lidar com o evento canplay
+            function handleCanPlay() {
+                if (status) {
+                    status.textContent = 'Pronto para reproduzir';
+                }
+            }
+
+            // Função para lidar com erros do player
+            function handleError(error) {
+                console.error('Erro no player:', error);
+                if (status) {
+                    status.textContent = 'Erro ao carregar vídeo';
+                }
+                
+                // Tentar novamente após 2 segundos
+                setTimeout(() => {
+                    tryPlayVideo();
+                }, 2000);
+            }
+
+            // Função para lidar com o fim do vídeo
+            function handleVideoEnded() {
+                console.log('Anúncio terminou, avançando para o próximo');
+                
+                // Se chegou ao final do ciclo de anúncios
+                if (currentAnuncio === anuncios.length - 1) {
+                    console.log('Final do ciclo de anúncios, mostrando informações');
+                    
+                    // Mostrar tela de informações
+                    infoScreen.style.display = 'flex';
+                    if (player) {
+                        player.style.display = 'none';
+                    }
+                    isShowingInfo = true;
+                    
+                    // Atualizar informações
+                    updateInfoScreen();
+                    
+                    // Configurar temporizador para voltar aos anúncios
+                    const infoTimeout = setTimeout(() => {
+                        console.log('Voltando para os anúncios após 10 segundos');
+                        infoScreen.style.display = 'none';
+                        if (player) {
+                            player.style.display = 'block';
+                            player.play();
+                        }
+                        isShowingInfo = false;
+                        currentAnuncio = 0;
+                        loadCurrentAnuncio();
+                    }, 10000); // Aumentado para 10 segundos
+
+                    // Adicionar evento para interromper o timeout se houver interação
+                    document.addEventListener('keydown', () => {
+                        clearTimeout(infoTimeout);
+                        toggleContent();
+                    }, { once: true });
+                } else {
+                    // Avançar para o próximo anúncio
+                    currentAnuncio++;
+                    loadCurrentAnuncio();
+                }
+            }
+
+            // Função para tentar reproduzir o vídeo
+            function tryPlayVideo() {
+                if (player) {
+                    player.play().catch(error => {
+                        console.warn('Erro ao tentar reproduzir:', error);
+                        if (error.name === 'NotAllowedError') {
+                            console.log('Tentando usar vídeo de backup...');
+                            player.src = BACKUP_VIDEO;
+                            player.play();
+                        }
+                    });
+                }
+            }
+
+            // Função para alternar tela cheia com suporte a Smart TVs
+            function toggleFullscreen() {
+                try {
+                    // Verificar se estamos em uma Smart TV
+                    if (IS_SMART_TV) {
+                        // Para Smart TVs LG, usar o modo de tela cheia do WebOS
+                        if (window.WebOS) {
+                            window.WebOS.requestFullScreen();
+                        } else {
+                            // Tentar usar o modo de tela cheia padrão
+                            if (document.fullscreenElement) {
+                                document.exitFullscreen();
+                            } else {
+                                player.requestFullscreen();
+                                infoScreen.classList.add('fullscreen');
+                            }
+                        }
+                    } else {
+                        // Para outros dispositivos
+                        if (document.fullscreenElement) {
+                            document.exitFullscreen();
+                        } else {
+                            player.requestFullscreen();
+                            infoScreen.classList.add('fullscreen');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Erro ao alternar tela cheia:', error);
+                    if (status) {
+                        status.textContent = 'Erro ao alternar tela cheia';
+                    }
+                }
+            }
+
+            // Função para atualizar o botão de tela cheia
+            function updateFullscreenButton() {
+                if (fullscreenBtn) {
+                    fullscreenBtn.textContent = document.fullscreenElement ? 'Exit Fullscreen' : 'Fullscreen';
+                }
+            }
+
+            // Cache para vídeos já carregados
+            const videoCache = new Map();
+            let currentVideoElement = null;
+            let nextVideoElement = null;
+            let isPreloading = false;
+            
+            // Função para criar um novo elemento de vídeo otimizado
+            function createVideoElement() {
+                console.log('Criando novo elemento de vídeo');
+                const video = document.createElement('video');
+                video.playsInline = true;
+                video.muted = true;
+                video.autoplay = true;
+                video.preload = 'auto';
+                video.style.position = 'absolute';
+                video.style.top = '0';
+                video.style.left = '0';
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.objectFit = 'contain';
+                video.style.visibility = 'visible';
+                video.style.backgroundColor = '#000';
+                console.log('Elemento de vídeo criado:', video);
+                return video;
+            }
+            
+            // Função para limpar elementos de vídeo não utilizados
+            function cleanupUnusedVideos() {
+                const allVideos = Array.from(document.getElementsByTagName('video'));
+                allVideos.forEach(video => {
+                    if (video !== currentVideoElement && video !== nextVideoElement) {
+                        video.pause();
+                        video.removeAttribute('src');
+                        video.load();
+                        if (video.parentNode) {
+                            video.parentNode.removeChild(video);
+                        }
+                    }
+                });
+            }
+            
+            // Função para pré-carregar o próximo vídeo
+            function preloadNextVideo() {
+                if (isPreloading || !anuncios.length || currentAnuncio >= anuncios.length - 1) return;
+                
+                const nextAnuncio = anuncios[currentAnuncio + 1];
+                if (!nextAnuncio || !nextAnuncio.arquivo) return;
+                
+                const videoSrc = `/uploads/${nextAnuncio.arquivo}?t=${Date.now()}`;
+                
+                // Se já está no cache, não precisa pré-carregar novamente
+                if (videoCache.has(videoSrc)) {
+                    nextVideoElement = videoCache.get(videoSrc);
+                    return;
+                }
+                
+                isPreloading = true;
+                
+                // Criar novo elemento de vídeo para pré-carregar
+                const preloadVideo = createVideoElement();
+                
+                preloadVideo.oncanplay = () => {
+                    console.log('Pré-carregado:', nextAnuncio.titulo);
+                    videoCache.set(videoSrc, preloadVideo);
+                    nextVideoElement = preloadVideo;
+                    isPreloading = false;
+                    
+                    // Limpar vídeos antigos do cache
+                    if (videoCache.size > 3) {
+                        const keys = Array.from(videoCache.keys());
+                        for (let i = 0; i < keys.length - 3; i++) {
+                            const oldVideo = videoCache.get(keys[i]);
+                            if (oldVideo && oldVideo !== currentVideoElement && oldVideo !== nextVideoElement) {
+                                oldVideo.pause();
+                                oldVideo.removeAttribute('src');
+                                oldVideo.load();
+                                if (oldVideo.parentNode) {
+                                    oldVideo.parentNode.removeChild(oldVideo);
+                                }
+                                videoCache.delete(keys[i]);
+                            }
+                        }
+                    }
+                };
+                
+                preloadVideo.onerror = (error) => {
+                    console.error('Erro ao pré-carregar vídeo:', error);
+                    isPreloading = false;
+                    if (preloadVideo.parentNode) {
+                        preloadVideo.parentNode.removeChild(preloadVideo);
+                    }
+                };
+                
+                const source = document.createElement('source');
+                source.src = videoSrc;
+                source.type = 'video/mp4';
+                preloadVideo.appendChild(source);
+                preloadVideo.load();
+            }
+            
+            // Função para carregar e reproduzir o anúncio atual
+            async function loadCurrentAnuncio(forceReload = false) {
+                if (!player || currentAnuncio >= anuncios.length) return;
+                
+                try {
+                    const anuncio = anuncios[currentAnuncio];
+                    console.log('Carregando anúncio:', anuncio.titulo);
+                    
+                    if (status) {
+                        status.textContent = `Carregando: ${anuncio.titulo}`;
+                    }
+                    
+                    // Limpar eventos do vídeo anterior
+                    if (currentVideoElement) {
+                        currentVideoElement.onplay = null;
+                        currentVideoElement.onended = null;
+                        currentVideoElement.onerror = null;
+                        currentVideoElement.oncanplay = null;
+                    }
+                    
+                    // Obter ou criar o elemento de vídeo
+                    let videoSrc = anuncio.arquivo;
+                    
+                    // Se não for uma URL completa, montar a URL correta
+                    if (!videoSrc.startsWith('http')) {
+                        const baseUrl = window.location.protocol + '//' + window.location.host;
+                        videoSrc = `${baseUrl}/uploads/${anuncio.arquivo}`;
+                    }
+                    
+                    // Adicionar timestamp para evitar cache quando necessário
+                    if (forceReload) {
+                        const separator = videoSrc.includes('?') ? '&' : '?';
+                        videoSrc += `${separator}t=${Date.now()}`;
+                    }
+                    
+                    console.log('Caminho do vídeo:', videoSrc);
+                    
+                    // Verificar se o vídeo está acessível
+                    try {
+                        const response = await fetch(videoSrc, { method: 'HEAD' });
+                        if (!response.ok) {
+                            throw new Error(`Arquivo não encontrado: ${videoSrc}`);
+                        }
+                        console.log('Vídeo encontrado e acessível');
+                    } catch (error) {
+                        console.error('Erro ao acessar o vídeo:', error);
+                        if (status) {
+                            status.textContent = `Erro: ${error.message}`;
+                        }
+                        // Tentar o próximo anúncio em caso de erro
+                        setTimeout(handleVideoEnded, 2000);
+                        return;
+                    }
+                    
+                    if (videoCache.has(videoSrc)) {
+                        // Usar vídeo do cache
+                        currentVideoElement = videoCache.get(videoSrc);
+                    } else {
+                        // Criar novo elemento de vídeo
+                        currentVideoElement = createVideoElement();
+                        const source = document.createElement('source');
+                        source.src = videoSrc;
+                        source.type = 'video/mp4';
+                        currentVideoElement.appendChild(source);
+                        videoCache.set(videoSrc, currentVideoElement);
+                    }
+                    
+                    // Configurar eventos
+                    currentVideoElement.oncanplay = () => {
+                        console.log('Vídeo pronto para reprodução:', anuncio.titulo);
+                        console.log('Duração do vídeo:', currentVideoElement.duration);
+                        if (status) {
+                            status.textContent = `Reproduzindo: ${anuncio.titulo}`;
+                        }
+                        // Forçar o vídeo a ser visível
+                        currentVideoElement.style.visibility = 'visible';
+                        currentVideoElement.style.display = 'block';
+                        // Iniciar pré-carregamento do próximo vídeo
+                        preloadNextVideo();
+                    };
+                    
+                    // Adicionar evento para quando o vídeo começar a tocar
+                    currentVideoElement.onplaying = () => {
+                        console.log('Vídeo começou a tocar:', anuncio.titulo);
+                        currentVideoElement.style.visibility = 'visible';
+                        currentVideoElement.style.display = 'block';
+                    };
+                    
+                    currentVideoElement.onended = handleVideoEnded;
+                    
+                    currentVideoElement.onerror = (error) => {
+                        console.error('Erro ao carregar vídeo:', error);
+                        if (status) {
+                            status.textContent = `Erro ao carregar: ${anuncio.titulo}`;
+                        }
+                        // Tentar o próximo vídeo em caso de erro
+                        setTimeout(handleVideoEnded, 2000);
+                    };
+                    
+                    console.log('Substituindo vídeo no player');
+                    // Limpar o player
+                    while (player.firstChild) {
+                        player.removeChild(player.firstChild);
+                    }
+                    
+                    // Esconder o vídeo atual se existir
+                    if (currentVideoElement) {
+                        currentVideoElement.pause();
+                        currentVideoElement.style.visibility = 'hidden';
+                        if (currentVideoElement.parentNode) {
+                            currentVideoElement.parentNode.removeChild(currentVideoElement);
+                        }
+                    }
+                    
+                    // Limpar o player completamente
+                    console.log('Adicionando vídeo ao player:', currentVideoElement);
+                    console.log('Player element:', player);
+                    console.log('Player children before clear:', player.children.length);
+                    
+                    // Remover todos os filhos do player
+                    player.innerHTML = '';
+                    
+                    // Limpar o player completamente
+                    player.innerHTML = '';
+                    
+                    // Criar um container simples para o vídeo
+                    const videoContainer = document.createElement('div');
+                    videoContainer.id = 'video-container';
+                    videoContainer.style.position = 'fixed';
+                    videoContainer.style.top = '0';
+                    videoContainer.style.left = '0';
+                    videoContainer.style.width = '100%';
+                    videoContainer.style.height = '100%';
+                    videoContainer.style.backgroundColor = '#000';
+                    videoContainer.style.zIndex = '1000';
+                    
+                    // Configurar o elemento de vídeo
+                    currentVideoElement.id = 'main-video';
+                    currentVideoElement.style.width = '100%';
+                    currentVideoElement.style.height = '100%';
+                    currentVideoElement.style.objectFit = 'contain';
+                    currentVideoElement.playsInline = true;
+                    currentVideoElement.muted = true;
+                    currentVideoElement.autoplay = true;
+                    currentVideoElement.preload = 'auto';
+                    currentVideoElement.controls = true; // Temporário para debug
+                    
+                    // Adicionar evento de erro para debug
+                    currentVideoElement.onerror = function(e) {
+                        console.error('Erro ao carregar o vídeo:', e);
+                        console.error('Caminho do vídeo:', videoSrc);
+                        console.error('Elemento de vídeo:', currentVideoElement);
+                    };
+                    
+                    // Adicionar evento de carregamento
+                    currentVideoElement.onloadeddata = function() {
+                        console.log('Vídeo carregado com sucesso');
+                        console.log('Dimensões do vídeo:', 
+                            currentVideoElement.videoWidth + 'x' + currentVideoElement.videoHeight);
+                    };
+                    
+                    // Criar elemento source
+                    const sourceElement = document.createElement('source');
+                    sourceElement.src = videoSrc;
+                    sourceElement.type = 'video/mp4';
+                    
+                    // Limpar fontes antigas e adicionar a nova
+                    while (currentVideoElement.firstChild) {
+                        currentVideoElement.removeChild(currentVideoElement.firstChild);
+                    }
+                    currentVideoElement.appendChild(sourceElement);
+                    
+                    // Adicionar o vídeo ao container
+                    videoContainer.appendChild(currentVideoElement);
+                    
+                    // Adicionar o container ao player
+                    player.appendChild(videoContainer);
+                    
+                    console.log('Estrutura do player montada com sucesso');
+                    console.log('Elemento de vídeo:', currentVideoElement);
+                    console.log('Fonte do vídeo:', videoSrc);
+                    
+                    // Forçar redesenho
+                    const dummy = currentVideoElement.offsetHeight;
+                    console.log('Redesenho forçado, dummy:', dummy);
+                    
+                    // Tentar reproduzir
+                    try {
+                        console.log('Tentando reproduzir o vídeo...');
+                        const playPromise = currentVideoElement.play();
+                        
+                        if (playPromise !== undefined) {
+                            playPromise.then(_ => {
+                                console.log('Reprodução automática iniciada com sucesso');
+                            }).catch(error => {
+                                console.error('Erro na reprodução automática:', error);
+                                // Tentar reproduzir com interação do usuário
+                                const playOnClick = () => {
+                                    currentVideoElement.play().then(() => {
+                                        console.log('Reprodução iniciada após interação do usuário');
+                                        document.removeEventListener('click', playOnClick);
+                                    }).catch(console.error);
+                                };
+                                document.addEventListener('click', playOnClick);
+                            });
+                        }
+                        console.log('Vídeo iniciado com sucesso');
+                    } catch (playError) {
+                        console.error('Erro ao reproduzir vídeo:', playError);
+                        if (status) {
+                            status.textContent = `Erro ao reproduzir: ${anuncio.titulo}`;
+                        }
+                        // Tentar novamente após um atraso
+                        setTimeout(() => {
+                            if (currentVideoElement) {
+                                currentVideoElement.play().catch(console.error);
+                            }
+                        }, 1000);
+                    }
+                    
+                    if (status) {
+                        status.textContent = `Reproduzindo: ${anuncio.titulo}`;
+                    }
+                    
+                    // Iniciar pré-carregamento do próximo vídeo
+                    preloadNextVideo();
+                    
+                } catch (error) {
+                    console.error('Erro ao carregar anúncio:', error);
+                    if (status) {
+                        status.textContent = 'Erro ao carregar anúncio';
+                    }
+                    
+                    // Tentar novamente após 5 segundos
+                    setTimeout(() => {
+                        loadCurrentAnuncio();
+                    }, 5000);
+                }
+            }
+
+            
+            // Função principal para iniciar o player com suporte a Smart TVs
+            async function startPlayer(outdoorId) {
+                try {
+                    console.log('Carregando anúncios para outdoor:', outdoorId);
+                    
+                    // Atualizar o ID do outdoor atual
+                    currentOutdoorId = outdoorId;
+                    
+                    // Entrar na sala do WebSocket para este outdoor
+                    if (socket) {
+                        socket.emit('join_outdoor', { outdoor_id: outdoorId });
+                    }
+                    
+                    // Configurar headers para Smart TVs
+                    const headers = {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'X-Device-Type': IS_SMART_TV ? 'smart-tv' : 'web'
+                    };
+                    
+                    // Configurar URL baseado no tipo de dispositivo
+                    const apiUrl = IS_SMART_TV 
+                        ? `https://osmarads.onrender.com/api/outdoors/${outdoorId}/anuncios` 
+                        : `/api/outdoors/${outdoorId}/anuncios`;
+                    
+                    const response = await fetch(apiUrl, {
+                        headers: headers
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Erro ${response.status}: ${await response.text()}`);
+                    }
+
+                    anuncios = await response.json();
+                    console.log('Anúncios carregados:', anuncios);
+                    
+                    if (status) {
+                        status.textContent = `Total de anúncios: ${anuncios.length}`;
+                    }
+                    
+                    if (anuncios.length === 0) {
+                        console.log('Nenhum anúncio disponível');
+                        if (player) {
+                            player.pause();
+                        }
+                        if (status) {
+                            status.textContent = 'Nenhum anúncio disponível';
+                        }
+                        return;
+                    }
+
+                    // Resetar índice para o primeiro anúncio
+                    currentAnuncio = 0;
+                    console.log('Iniciando reprodução com anúncio:', anuncios[currentAnuncio].titulo);
+
+                    // Carregar e reproduzir o primeiro anúncio
+                    await loadCurrentAnuncio();
+
+                    // Configurar evento para avançar para o próximo anúncio
+                    if (player) {
+                        player.addEventListener('ended', handleVideoEnded);
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar anúncios:', error);
+                    if (status) {
+                        status.textContent = 'Erro ao carregar anúncios';
+                    }
+                }
+            }
+
+            // Mapeamento de teclas para diferentes modelos de Smart TV
+            const KEY_MAP = {
+                // Teclas padrão
+                'Enter': 'enter',
+                ' ': 'enter',
+                'i': 'info',
+                'I': 'info',
+                'ArrowLeft': 'left',
+                'ArrowRight': 'right',
+                'ArrowUp': 'up',
+                'ArrowDown': 'down',
+                'Backspace': 'back',
+                'Escape': 'back',
+                'MediaPlayPause': 'playPause',
+                'MediaStop': 'stop',
+                'MediaTrackNext': 'next',
+                'MediaTrackPrevious': 'previous',
+                // Teclas específicas para WebOS
+                'MediaRewind': 'rewind',
+                'MediaFastForward': 'fastForward',
+                // Teclas específicas para Tizen
+                'ColorF0Red': 'red',
+                'ColorF1Green': 'green',
+                'ColorF2Yellow': 'yellow',
+                'ColorF3Blue': 'blue'
+            };
+
+            // Adicionar suporte a controles remotos
+            function handleRemoteControl(e) {
+                console.log('Tecla pressionada:', e.key, 'Código:', e.code);
+                
+                // Mapear a tecla pressionada para uma ação
+                const action = KEY_MAP[e.key] || e.key.toLowerCase();
+                let actionName = action;
+                
+                switch(action) {
+                    case 'enter':
+                    // Adicionar estilos CSS inline como fallback
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        #player {
+                            position: fixed !important;
+                            top: 0 !important;
+                            left: 0 !important;
+                            width: 100vw !important;
+                            height: 100vh !important;
+                            background-color: #000 !important;
+                            z-index: 9999 !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                        }
+                        .video-js {
+                            width: 100% !important;
+                            height: 100% !important;
+                            padding-top: 0 !important;
+                        }
+                        .vjs-tech {
+                            object-fit: contain !important;
+                            width: 100% !important;
+                            height: 100% !important;
+                            position: absolute !important;
+                            top: 0 !important;
+                            left: 0 !important;
+                        }
+                        #video-container {
+                            position: fixed !important;
+                            top: 0 !important;
+                            left: 0 !important;
+                            width: 100vw !important;
+                            height: 100vh !important;
+                            z-index: 10000 !important;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                    actionName = 'enter';
+                    toggleFullscreen();
+                    break;
+                        
+                    case 'info':
+                    case 'i':
+                        actionName = 'info';
+                        toggleContent();
+                        break;
+                        
+                    case 'left':
+                    case 'arrowleft':
+                        actionName = 'left';
+                        if (currentAnuncio > 0) {
+                            currentAnuncio--;
+                            loadCurrentAnuncio();
+                            showFeedback('Anterior', '←');
+                        }
+                        break;
+                        
+                    case 'right':
+                    case 'arrowright':
+                        actionName = 'right';
+                        if (currentAnuncio < anuncios.length - 1) {
+                            currentAnuncio++;
+                            loadCurrentAnuncio();
+                            showFeedback('Próximo', '→');
+                        }
+                        break;
+                        
+                    case 'playPause':
+                    case 'play':
+                    case 'pause':
+                        actionName = player.paused ? 'play' : 'pause';
+                        if (player.paused) {
+                            player.play().then(() => {
+                                showFeedback('Reproduzindo', '▶️');
+                            }).catch(e => {
+                                console.error('Erro ao reproduzir:', e);
+                                showFeedback('Erro ao reproduzir', '❌');
+                            });
+                        } else {
+                            player.pause();
+                            showFeedback('Pausado', '⏸️');
+                        }
+                        break;
+                        
+                    case 'stop':
+                        actionName = 'stop';
+                        player.pause();
+                        player.currentTime = 0;
+                        showFeedback('Parado', '⏹️');
+                        break;
+                        
+                    case 'back':
+                    case 'return':
+                        actionName = 'back';
+                        console.log('Voltar pressionado');
+                        showFeedback('Voltar', '↩️');
+                        // Adicione aqui a lógica para voltar à tela anterior
+                        break;
+                        
+                    case 'red':
+                    case 'green':
+                    case 'yellow':
+                    case 'blue':
+                        actionName = action;
+                        console.log(`Botão ${action.toUpperCase()} pressionado`);
+                        showFeedback(`Botão ${action}`, `🟥🟩🟨🟦`['redgreenyellowblue'.indexOf(action) / 4]);
+                        // Adicione ações personalizadas para os botões coloridos aqui
+                        break;
+                        
+                    default:
+                        // Mostrar feedback para outras teclas não mapeadas
+                        showFeedback('Tecla: ' + e.key, e.key);
+                }
+                
+                // Impedir comportamento padrão para teclas de controle de mídia
+                if (['MediaPlayPause', 'MediaStop', 'MediaTrackNext', 'MediaTrackPrevious', 
+                     'MediaRewind', 'MediaFastForward'].includes(e.key)) {
+                    e.preventDefault();
+                }
+                
+                // Log da ação para depuração
+                console.log(`Ação executada: ${actionName} (${e.key})`);
+            }
+
+            // Adicionar feedback visual para controles remotos
+            const feedback = document.createElement('div');
+            feedback.id = 'remote-feedback';
+            feedback.style.position = 'fixed';
+            feedback.style.top = '20px';
+            feedback.style.left = '50%';
+            feedback.style.transform = 'translateX(-50%)';
+            feedback.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            feedback.style.color = '#fff';
+            feedback.style.padding = '15px 30px';
+            feedback.style.borderRadius = '8px';
+            feedback.style.fontSize = '18px';
+            feedback.style.fontWeight = 'bold';
+            feedback.style.zIndex = '10000';
+            feedback.style.display = 'none';
+            feedback.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+            feedback.style.transition = 'opacity 0.3s';
+            document.body.appendChild(feedback);
+
+            // Estilo para o ícone de botão
+            const buttonStyle = 'display: inline-block; background: #555; color: #fff; border-radius: 4px; padding: 2px 8px; margin: 0 2px; font-family: monospace;';
+
+            function showFeedback(action, key) {
+                let text = '';
+                let icon = '';
+                
+                // Mapear ações para textos amigáveis
+                const actionMap = {
+                    'enter': 'Selecionar',
+                    'info': 'Informações',
+                    'left': 'Anterior',
+                    'right': 'Próximo',
+                    'playPause': 'Play/Pausa',
+                    'stop': 'Parar',
+                    'back': 'Voltar',
+                    'red': 'Vermelho',
+                    'green': 'Verde',
+                    'yellow': 'Amarelo',
+                    'blue': 'Azul'
+                };
+                
+                // Texto amigável para a ação
+                const actionText = actionMap[action] || action;
+                
+                // Criar ícone baseado na tecla
+                if (key) {
+                    icon = `<span style="${buttonStyle}">${key}</span>`;
+                }
+                
+                // Montar o texto de feedback
+                text = `${actionText} ${icon}`;
+                
+                // Atualizar e exibir o feedback
+                feedback.innerHTML = text;
+                feedback.style.display = 'block';
+                feedback.style.opacity = '1';
+                
+                // Configurar para esmaecer após 1.5 segundos
+                clearTimeout(feedback.timer);
+                feedback.timer = setTimeout(() => {
+                    feedback.style.opacity = '0';
+                    // Remover completamente após a transição
+                    setTimeout(() => {
+                        feedback.style.display = 'none';
+                    }, 300);
+                }, 1500);
+            }
+
+
+            // Função para carregar a lista de anúncios do servidor
+            async function loadAnuncios(forceReload = false) {
+                try {
+                    console.log('Carregando lista de anúncios...');
+                    const url = new URL(`${SERVER_URL}/api/outdoors/${currentOutdoorId}/anuncios`);
+                    if (forceReload) {
+                        url.searchParams.append('t', new Date().getTime());
+                    }
+
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Erro ao carregar anúncios');
+                    }
+                    
+                    const data = await response.json();
+                    anuncios = Array.isArray(data) ? data : [];
+                    console.log(`${anuncios.length} anúncios carregados`);
+                    
+                    // Se não houver anúncios, mostrar mensagem
+                    if (anuncios.length === 0) {
+                        showFeedback('info', 'Nenhum anúncio disponível');
+                        if (player) {
+                            player.pause();
+                        }
+                        return;
+                    }
+                    
+                    // Se for um recarregamento forçado, manter o anúncio atual se possível
+                    if (!forceReload && currentAnuncio < anuncios.length) {
+                        console.log('Mantendo anúncio atual:', currentAnuncio);
+                        loadCurrentAnuncio(true);
+                    } else {
+                        // Reiniciar o player com os novos anúncios
+                        currentAnuncio = 0;
+                        loadCurrentAnuncio(true);
+                    }
+                    
+                } catch (error) {
+                    console.error('Erro ao carregar anúncios:', error);
+                    showFeedback('error', 'Erro ao carregar anúncios');
+                    // Tentar novamente após 30 segundos
+                    setTimeout(() => loadAnuncios(), 30000);
+                }
+            }
+
+            // Configurar eventos de teclado
+            document.addEventListener('keydown', handleRemoteControl);
+
+            // Inicializar o socket se ainda não estiver inicializado
+            if (!socket) {
+                socket = initSocket();
+            }
+
+            // Configurar eventos de atualização em tempo real
+            if (socket) {
+                socket.on('outdoor_updated', (data) => {
+                    console.log('Outdoor atualizado, recarregando anúncios...', data);
+                    if (data.outdoor_id === currentOutdoorId) {
+                        loadAnuncios();
+                    }
+                });
+
+                socket.on('anuncio_updated', (data) => {
+                    console.log('Anúncio atualizado, recarregando lista...', data);
+                    if (data.outdoor_id === currentOutdoorId) {
+                        loadAnuncios();
+                    }
+                });
+            }
+
+            // Configurar evento para recarregar o player
+            socket.on('reloadPlayer', (data) => {
+                if (data.outdoor_id === currentOutdoorId) {
+                    console.log('Recebido comando para recarregar player');
+                    loadAnuncios();
+                }
+            });
+
+            // Configurar eventos de atualização em tempo real
+            socket.on('anuncio_updated', (data) => {
+                console.log('Anúncio atualizado:', data);
+                // Se o anúncio atual foi atualizado, recarregá-lo
+                if (anuncios && anuncios[currentAnuncio] && anuncios[currentAnuncio]._id === data.anuncio_id) {
+                    console.log('Anúncio atual foi atualizado, recarregando...');
+                    loadCurrentAnuncio(true); // Forçar recarregamento
+                }
+            });
+
+            socket.on('outdoor_updated', (data) => {
+                console.log('Outdoor atualizado, recarregando anúncios...');
+                // Recarregar lista de anúncios
+                if (currentOutdoorId === data.outdoor_id) {
+                    loadAnuncios();
+                }
+            });
+
+            // Configurar evento para entrar na sala do outdoor quando o socket estiver conectado
+            socket.on('connect', () => {
+                if (currentOutdoorId) {
+                    console.log('Conectado ao WebSocket, entrando na sala do outdoor:', currentOutdoorId);
+                    socket.emit('join_outdoor', { outdoor_id: currentOutdoorId });
+                }
+            });
+
+            // Adicionar feedback visual
+            if (status) {
+                status.textContent = 'Iniciando player...';
+            }
+
+            // Inicializar quando o DOM estiver carregado
+            document.addEventListener('DOMContentLoaded', async () => {
+                try {
+                    // Inicializar elementos do DOM
+                    if (!initElements()) {
+                        console.error('Falha ao inicializar elementos do DOM');
+                        return;
+                    }
+
+                    // Iniciar player
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const outdoorId = urlParams.get('outdoor_id');
+                    
+                    // Verificar se o outdoor_id existe
+                    if (!outdoorId) {
+                        console.error('ID do outdoor não encontrado na URL');
+                        if (status) {
+                            status.textContent = 'Erro: ID do outdoor não encontrado';
+                        }
+                        return;
+                    }
+
+                    // Inicializar player
+                    currentOutdoorId = outdoorId;
+                    await startPlayer(outdoorId);
+
+                    // Configurar intervalo para atualizar informações
+                    setInterval(updateInfoScreen, 1000);
+
+                    // Configurar Socket.IO
+                    const socket = setupSocket();
+                    if (socket && currentOutdoorId) {
+                        socket.emit('join_outdoor', { outdoor_id: currentOutdoorId });
+                    }
+
+                    // Configurar eventos de tela cheia
+                    setupFullscreenEvents();
+
+                    // Log de depuração
+                    console.log('URL:', window.location.href);
+                    console.log('Outdoor ID:', currentOutdoorId);
+
+                    // Adicionar botão para ativar tela cheia
+                    const fullscreenBtn = document.createElement('button');
+                    fullscreenBtn.textContent = 'Tela Cheia';
+                    fullscreenBtn.style.position = 'fixed';
+                    fullscreenBtn.style.bottom = '10px';
+                    fullscreenBtn.style.right = '10px';
+                    fullscreenBtn.style.padding = '10px';
+                    fullscreenBtn.style.zIndex = '1000';
+                    fullscreenBtn.onclick = toggleFullscreen;
+                    document.body.appendChild(fullscreenBtn);
+                } catch (error) {
+                    console.error('Erro durante inicialização:', error);
+                    if (status) {
+                        status.textContent = 'Erro durante inicialização: ' + error.message;
+                    }
+                }
+            });
+        </script>
+    </body>
+</html>
